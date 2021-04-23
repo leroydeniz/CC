@@ -1,0 +1,634 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,xparse}
+
+
+\ExplSyntaxOn
+\NewDocumentCommand{\ruffini}{mmmm}
+ {% #1 = polynomial, #2 = divisor, #3 = middle row, #4 = result
+  \franklin_ruffini:nnnn { #1 } { #2 } { #3 } { #4 }
+ }
+
+\seq_new:N \l_franklin_temp_seq
+\tl_new:N \l_franklin_scheme_tl
+\int_new:N \l_franklin_degree_int
+
+\cs_new_protected:Npn \franklin_ruffini:nnnn #1 #2 #3 #4
+ {
+  % Start the first row
+  \tl_set:Nn \l_franklin_scheme_tl { #2 & }
+  % Split the list of coefficients
+  \seq_set_split:Nnn \l_franklin_temp_seq { , } { #1 }
+  % Remember the number of columns
+  \int_set:Nn \l_franklin_degree_int { \seq_count:N \l_franklin_temp_seq }
+  % Fill the first row
+  \tl_put_right:Nx \l_franklin_scheme_tl
+   { \seq_use:Nnnn \l_franklin_temp_seq { & } { & } { & } }
+  % End the first row and leave two empty places in the next
+  \tl_put_right:Nn \l_franklin_scheme_tl { \\ & & }
+  % Split the list of coefficients and fill the second row
+  \seq_set_split:Nnn \l_franklin_temp_seq { , } { #3 }
+  \tl_put_right:Nx \l_franklin_scheme_tl
+   { \seq_use:Nnnn \l_franklin_temp_seq { & } { & } { & } }
+  % End the second row
+  \tl_put_right:Nn \l_franklin_scheme_tl { \\ }
+  % Compute the \cline command
+  \tl_put_right:Nx \l_franklin_scheme_tl
+   {
+    \exp_not:N \cline { 2-\int_to_arabic:n { \l_franklin_degree_int + 1 } }
+   }
+  % Leave an empty place in the third row (no rule either)
+  \tl_put_right:Nn \l_franklin_scheme_tl { \multicolumn{1}{r}{} & }
+  % Split and fill the third row
+  \seq_set_split:Nnn \l_franklin_temp_seq { , } { #4 }
+  \tl_put_right:Nx \l_franklin_scheme_tl
+   { \seq_use:Nnnn \l_franklin_temp_seq { & } { & } { & } }
+  % Start the array (with \use:x because the array package
+  % doesn't expand the argument)
+  \use:x
+   {
+    \exp_not:n { \begin{array} } { r | *{\int_use:N \l_franklin_degree_int} { r } }
+   }
+  % Body of the array and finish
+  \tl_use:N \l_franklin_scheme_tl
+  \end{array}
+ }
+\ExplSyntaxOff
+
+
+\usepackage[left=2.5cm,top=2.5cm,right=2.5cm,bottom=2.5cm]{geometry} 
+
+\usepackage{enumerate} 
+\usepackage{graphicx}
+\graphicspath{ {images/} }
+\usepackage{setspace}  
+\usepackage{booktabs}
+
+\makeatletter
+\renewcommand*\env@matrix[1][*\c@MaxMatrixCols c]{%
+  \hskip -\arraycolsep
+  \let\@ifnextchar\new@ifnextchar
+  \array{#1}}
+\makeatother
+\setlength{\parskip}{7mm}
+
+\begin{document}
+
+
+
+\begin{titlepage}
+\title{ \centering \scshape\LARGE Computación Científica } \par	
+\author{
+\huge\bfseries Tema IV \\ \\ Ecuaciones con raíces reales \\ distintas pero muy próximas\\ \\
+\small{Leroy Deniz}\\
+\small{Grado en Ingeniería en Informática}\\
+\small{Universidad del País Vasco}\\
+\date{}
+}
+\end{titlepage}
+
+%genera el título definido arriba
+\maketitle
+
+
+%salto de página
+\newpage
+
+%%%%%%%%%%%%%%%%%% SINTESIS %%%%%%%%%%%%%%%%%% 
+
+\textbf{ \huge\bfseries Síntesis}
+
+El Método de Newton nos facilita encontrar raíces de funciones aproximándonos a ella mediante una sucesión convergente generada a partir de un término inicial, donde el siguiente tiene una relación directa con el valor del término inmediatamente anterior.
+
+No obstante, el problema surge cuando la función tiene al menos dos raíces muy próximas, lo que genera una inconsistencia en los resultados y, además, no se estaría aproximando a una única raíz.
+
+En este apartado se desarrolla el procedimiento correcto para encontrar ambas raíces muy próximas entre sí, utilizando Newton. El mismo consta en elegir dos valores dentro del intervalo determinado por ambas raíces para luego utilizarlos como valores iniciales en la función de recurrencia, de modo que con ellos se nos asegura la convergencia de ambas sucesiones a los valores de cada una de las raíces.
+
+Estos valores intermedios se calculan en función del máximo o mínimo ($\mu$) que presenta la función en el intervalo (ver Teorema de Rolle), desplazando esa cantidad $\varepsilon$ en ambos sentidos ($\mu+\varepsilon$ y $\mu-\varepsilon$). Luego estos son los valores iniciales de la recurrencia de Newton.
+
+
+
+
+
+
+
+
+
+%salto de página
+\clearpage
+
+%%%%%%%%%%%%%%%%%% CONTEXTUALIZACIÓN %%%%%%%%%%%%%%%%%% 
+
+\textbf{ \huge\bfseries Contextualización}
+
+El Método de Newton es útil para hallar raíces de funciones generando una sucesión de valores, cada vez más próximos, que convegen en un valor lo bastante cercano de la raíz. El problema se presenta cuando hay dos raíces muy próximas, y la primera pregunta que surge es ¿a cuál de las dos raíces converge la sucesión mediante este método?
+
+La respuesta es que no se puede utilizar el método tal y como se utiliza en situaciones donde las raíces distan una distancia considerable.
+
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.13]{11.png} 
+\caption{Representación del problema}
+\end{center}
+\end{figure}
+
+Entonces, el esquema de Newton presenta dificultades cuando pretendemos determinar dos raíces reales de $f(x)=0$ que se encuentran muy próximas. En esta situación, las condiciones de convergencia se satisfacen en un intervalo muy pequeño (intervalo $[1,4 ; 1,6]$ en la Figura 1), consecuentemente se requiere una precisión elevada en la elección del valor inicial ($x_0$).
+
+Para este procedimiento se toma en cuenta una particularización del Teorema de Rolle, donde se demuestra que si una función es contínua en un intervalo cerrado $[a,b]$, derivable en el intervalo abierto $(a,b)$ y $f(a)=f(b)$, entonces existe al menos un máximo o mínimo en ese intervalo, es decir, que $f'(x)=0$.
+
+Vamos a demostrar cómo obtener la elección adecuada si la ecuación $f(x)$ tiene dos raíces aproximadamente iguales a $x=\lambda$, entonces $f(\lambda)=0 \ \land f'(\lambda)\simeq 0$.\footnote{$f(\lambda)=0$ porque es la aproximación de ambas raíces y la recta tangente a la curva en ese intervalo tenderá a ser paralela al eje de abscisas en ese intervalo.}
+
+
+
+
+
+
+
+%salto de página
+\clearpage
+
+%%%%%%%%%%%%%%%%%% PROCEDIMIENTO %%%%%%%%%%%%%%%%%% 
+
+\textbf{ \huge\bfseries Procedimiento}
+
+Para obtener un valor inicial cercano a estas raíces que nos garanticen la convergencia del método, es necesario obtener, previamente, la raíz de $f'(x)=0$ en las proximidades de $\lambda$. 
+A partir de esta estimación, de la raíz de $f'(x)$ podemos encontrar las dos raíces de $f(x)$ (que estarán próximas a ese valor), de la siguiente forma:
+
+Sea $\mu$ una raíz de $f'(x)$ y $\varepsilon$ un valor muy pequeño, tal que $\mu+\varepsilon$ sea una raíz de $f(x)$, entonces usamos la expresión en Serie de Taylor:
+$$f(\mu+\varepsilon)=f(\mu)+\varepsilon\cdot f'(\mu)+\dfrac{\varepsilon^2}{2}f''(\mu)+ \dots$$
+Por lo que definimos antes, $\mu$ es raíz de la derivada primera, por lo tanto el segundo término de Taylor $\varepsilon \cdot f'(\mu)=0$ y, además, como $f(\mu+\varepsilon)=0$ es raíz de la función, la expresión de Taylor también tenderá a 0.
+$$f(\mu)+\dfrac{\varepsilon^2}{2}f''(\mu)\simeq 0$$
+Finalmente, la expresión para el cálculo de el $\varepsilon$ adecuado es la siguiente:
+$$ \varepsilon^2 \simeq \dfrac{-2f(\mu)}{f''(\mu)} \ \ \ \ \Rightarrow \ \ \ \ \varepsilon\simeq \sqrt{\dfrac{-2f(\mu)}{f''(\mu)}} $$
+Luego, los valores iniciales ($x_0$) para la recurrencia serán $\mu+\varepsilon$ y $\mu-\varepsilon$, iteramos con el Método de Newton y paramos cuando hayamos cumplido el criterio de paro ($E_k < tol$).
+
+
+$$
+\left\{
+\begin{array}{rcl}
+x_0&=&\mu+\varepsilon \\
+x_{k+1} &=& x_k - \dfrac{f(x_k)}{f'(x_k)}
+\end{array}
+\right. \ \ \land \ \ 
+\left\{
+\begin{array}{rcl}
+x_0&=&\mu-\varepsilon \\
+x_{k+1} &=& x_k - \dfrac{f(x_k)}{f'(x_k)}
+\end{array}
+\right.
+$$
+
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.1]{22.png} 
+\caption{Esquema de localización de valores}
+\end{center}
+\end{figure}
+
+
+
+
+%salto de página
+\clearpage
+
+%%%%%%%%%%%%%%%%%% EJEMPLO 1 %%%%%%%%%%%%%%%%%% 
+
+\textbf{ \huge\bfseries Ejemplo}
+
+Determinar las raíces de la ecuación que están próximas a $x_0=1,5$
+$$f(x)=x^4-1,99x^3-1,76x^2+5,22x-2,33$$
+
+\textbf{Solución}
+
+$f(x) = x^4-1,99x^3-1,76x^2+5,22x-2,33$
+
+$f'(x) = 4x^3-5,97x^2-3,52x+5,22$.
+
+$f''(x) = 12x^2-11,94x-3,52$
+
+El primer paso es encontrar la raíz de la derivada primera utilizando el método de Newton, por lo cual:
+$$x_{n+1}=x_n-\dfrac{f'(x_n)}{f''(x_n)}$$
+
+Con la elección inicial de $x_0=1,5$ obtenemos la secuencia:
+\renewcommand{\arraystretch}{1,5}
+$$
+ \begin{array}{|c | c|} 
+ \hline
+ \ \ n \ \  & \ \ x_n \ \ \\ [0.5ex] 
+ \hline\hline
+0 & 1,5\\ 
+ \hline
+1 & 1,498653501\\
+ \hline
+2 & 1,498649564\\
+ \hline
+3 & 1,498649564\\
+ \hline
+\end{array}
+$$
+
+Para $n=2$ y $n=3$ los resultados en longitud 10 son iguales, entonces paramos la iteración habiendo encontrado la raíz aproximada de la derivada en esa longitud, tenemos $\mu=1,498649564$.
+
+Calculamos el $\varepsilon$ para determinar los valores iniciales de cada nueva recurrencia.
+$$ \varepsilon^2 = \dfrac{-2f(\mu)}{f''(\mu)} \ \ \ \ \Rightarrow \ \ \ \ \varepsilon^2 = \dfrac{-2f(1,498649564)}{f''(1,498649564)} \ \ \ \ \Rightarrow \ \ \ \ \varepsilon=0,070483614$$
+
+Los valores que utilizaremos como iniciales para la aplicación del Método de Newton para encontrar ambas raíces de $f(x)$ cercanas a $x=1,5$ serán:
+$$\mu+\varepsilon=1,569133179 \ \ \ \ \land \ \ \ \ \mu-\varepsilon=1,428165949$$
+
+
+Aplicamos la recurrencia de Newton para $x_0=\mu+\varepsilon$ y obtenemos la secuencia:
+$$
+\left\{
+\begin{array}{rcl}
+x_0&=& 1,569133179 \\
+x_{n+1} &=& x_n - \dfrac{f(x_n)}{f'(x_n)}
+\end{array}
+\right. \ \ \ \ \ \ \ 
+\renewcommand{\arraystretch}{1,5}
+ \begin{array}{|c | c|} 
+ \hline
+ \ \ n \ \  & \ \ x_n \ \ \\ [0.5ex] 
+ \hline\hline
+0 & 1,569133179\\ 
+ \hline
+1 & 1,565971998\\
+ \hline
+2 & 1,565887295\\
+ \hline
+3 & 1,565887234\\
+ \hline
+4 & 1,565887234\\
+ \hline
+\end{array}
+$$
+
+Volvemos a aplicar la recurrencia de Newton para $x_0=\mu-\varepsilon$ y obtenemos la secuencia:
+$$
+\left\{
+\begin{array}{rcl}
+x_0&=& 1,428165949 \\
+x_{n+1} &=& x_n - \dfrac{f(x_n)}{f'(x_n)}
+\end{array}
+\right. \ \ \ \ \ \ \ 
+\renewcommand{\arraystretch}{1,5}
+ \begin{array}{|c | c|} 
+ \hline
+ \ \ n \ \  & \ \ x_n \ \ \\ [0.5ex] 
+ \hline\hline
+0 & 1,428165949\\ 
+ \hline
+1 & 1,424016937\\
+ \hline
+2 & 1,424112715\\
+ \hline
+3 & 1,424112766\\
+ \hline
+4 & 1,424112766\\
+ \hline
+\end{array}
+$$
+
+Para ambos casos, basta con 4 iteraciones para alcanzar un nivel de precisión de nueve cifras en la parte fraccionaria, es decir, converge en al menos nueve dígitos. Evaluamos ambas funciones en esos puntos candidatos a raíz a través del Algoritmo de Horner:
+
+\[
+\ruffini{1,-1.99,-1.76,5.22,-2.23}{1,565887234}{1.565887234,-0.6641127661,-3.795887234,2.23}{1,-0.424112766,-2.424112766,1.424112766,0} 
+\]
+\[
+\ruffini{1,-0.424112766,-2.424112766,1.424112766}{1,424112766}{1.424112766,1.424112766,-1.424112766}{1,1,-1,0} 
+\]
+
+Luego las raíces de $f(x)$ aproximadas en 10 dígitos son: 
+$$x_1=1,565887234 \ \ \ \land \ \ \ x_2=1,424112766$$
+
+
+
+
+
+%salto de página
+\clearpage
+
+%%%%%%%%%%%%%%%%%% EJERCICIOS PROPUESTOS %%%%%%%%%%%%%%%%%% 
+
+\textbf{ \huge\bfseries Ejercicios propuestos}
+
+\textbf{Ejercicio 1.} Dos soluciones de la siguiente ecuación están próximas a $x=2$. Calcular ambas raíces con un nivel de precisión de cuatro cifras en la parte fraccionaria.
+$$f(x)=x^4-3,9080x^3+4,8083x^3-3,9080x+3,8083$$
+$$\textbf{Solución en Anexo 2}$$
+
+\vspace{3em}
+
+\textbf{Ejercicio 2.}  La siguiente ecuación tiene dos raíces cercanas a $x=0,5$. Calcularlas con un nivel de precisión de seis dígitos en la parte fraccionaria.
+$$g(x)=5x^3-10x^2+6,232x-1,232$$
+$$\textbf{Solución en Anexo 3}$$
+
+
+
+
+
+
+
+
+%salto de página
+\newpage
+
+%%%%%%%%%%%%%%%%%% ANEXO 1 %%%%%%%%%%%%%%%%%% 
+
+\textbf{ \huge\bfseries Anexo 1}
+
+\textbf{Algoritmo de Newton para raíces reales distintas pero muy cercanas} 
+
+$x$ es una aproximación al par de raíces aproximadamente iguales y $tol$ es la tolerancia, cuya función es de criterio de parada.
+
+
+\begin{verbatim}
+/* lee datos de entrada */
+Leer (x,tol);
+
+/* guardar valor original de x */
+y := x; 
+
+/* búsqueda de raíz de f'(x) - mu */
+Repetir {
+      TerminoCorreccion := f'(y) / f''(y);
+      y := y - TerminoCorreccion;
+} Hasta que ( abs(TerminoCorreccion) < tol );
+
+/* calcula el epsilon */
+eps := sqrt(-2 * f(y) / f''(y));
+
+/* preciso dos procesos: para x+eps y x-eps */
+sign := 1;
+
+Para i:=1 hasta 2 hacer {
+
+      /* índice de proceso NW */
+      k := 0; 
+      y := x + sign * eps;
+      Repetir {
+            k := k+2;
+            TerminoCorreccion := f(y) / f'(y);
+            y := y - TerminoCorreccion;
+      } Hasta que ( abs(TerminoCorreccion) < tol );
+
+      /* segunda raíz con x-eps */
+      sign := -1;
+      
+      /* persistir la segunda raíz */
+      Escribir ( y,k );
+      
+Finalizar;
+}
+
+\end{verbatim}
+
+
+
+
+
+
+
+
+
+
+%salto de página
+\newpage
+
+%%%%%%%%%%%%%%%%%% ANEXO 2 %%%%%%%%%%%%%%%%%% 
+
+\textbf{ \huge\bfseries Anexo 2}
+
+\textbf{Solución del Ejercicio 1} 
+
+En primer lugar damos las funciones que vamos a utilizar:
+
+$
+\begin{array}{rcl}
+f(x) &=& x^4-3,9080x^3+4,8083x^2-3,9080x+3,8083 \\
+f'(x) &=& 4x^3-11,724x^2+9,6166x-3,9080\\
+f''(x) &=& 12x^2-23,448x+9,6166
+\end{array}
+$
+
+Paso 1: hallar $\mu$ (raíz de la derivada) aplicando el Algoritmo de Newton sabiendo que existe una raíz en las cercanías de $x=2$.
+
+$$
+\left\{
+\begin{array}{rcl}
+x_0&=&2 \\
+x_{n+1}&=&x_n-\dfrac{f'(x_n)}{f''(x_n)}
+\end{array}
+\right. \ \ \ \ \ \ \ 
+\renewcommand{\arraystretch}{1,5}
+ \begin{array}{|c | c|} 
+ \hline
+ \ \ n \ \  & \ \ x_n \ \ \\ [0.5ex] 
+ \hline\hline
+0 & 2\\ 
+ \hline
+1 & 1,959964927\\
+ \hline
+2 & 1,957974603\\
+ \hline
+3 & 1,957969794\\
+ \hline
+4 & 1,957969794\\
+ \hline
+\end{array}
+$$
+
+$$\mu=1,957969794$$
+
+Paso 2: hallar el $\varepsilon$ que nos asegure la convergencia
+$$\varepsilon^2=\dfrac{-2\cdot f(\mu)}{f'(\mu)} \ \ \Rightarrow \ \ \varepsilon^2= \dfrac{-2 \cdot (-0,0473708916)}{9,709872841} \ \ \Rightarrow \ \ \varepsilon= 0,0977770063$$
+
+Paso 3: aplicamos el algoritmo de Newton con los valores iniciales $\mu + \varepsilon$ y $\mu - \varepsilon$.
+
+$
+\begin{array}{rcl}
+x_{0_1} = \mu + \varepsilon = 1,957969794+0,0977770063 = 2,055746800 \\
+x_{0_2} = \mu - \varepsilon = 1,957969794-0,0977770063 =1,860192788
+\end{array}
+$
+
+Para $x_0=\mu+\varepsilon$ y obtenemos la secuencia:
+$$
+\left\{
+\begin{array}{rcl}
+x_0&=&  2,055746800 \\
+x_{n+1} &=& x_n - \dfrac{f(x_n)}{f'(x_n)}
+\end{array}
+\right. \ \ \ \ \ \ \ 
+\renewcommand{\arraystretch}{1,5}
+ \begin{array}{|c | c|} 
+ \hline
+ \ \ n \ \  & \ \ x_n \ \ \\ [0.5ex] 
+ \hline\hline
+0 & 2,055746800\\ 
+ \hline
+1 & 2,053116245\\
+ \hline
+2 & 2,053075738\\
+ \hline
+3 & 2,053075729\\
+ \hline
+4 & 2,053075729\\
+ \hline
+\end{array}
+$$
+
+
+Luego para $x_0=\mu-\varepsilon$ y obtenemos la secuencia:
+$$
+\left\{
+\begin{array}{rcl}
+x_0&=& 1,860192788 \\
+x_{n+1} &=& x_n - \dfrac{f(x_n)}{f'(x_n)}
+\end{array}
+\right. \ \ \ \ \ \ \ 
+\renewcommand{\arraystretch}{1,5}
+ \begin{array}{|c | c|} 
+ \hline
+ \ \ n \ \  & \ \ x_n \ \ \\ [0.5ex] 
+ \hline\hline
+0 & 1,860192788\\ 
+ \hline
+1 & 1,854800684\\
+ \hline
+2 & 1,854924207\\
+ \hline
+3 & 1,854924271\\
+ \hline
+4 & 1,854924271\\
+ \hline
+\end{array}
+$$
+
+Paso 4: evalúo la función en ambos puntos candidatos a raices mediante el Algoritmo de Horner.
+
+\[
+\ruffini{1,-3.9080,4.8083,-3.9080,3.8083}{2,053075729}{2.053075729,-3.8083,2.053075729,-3.8083}{1,-1.854924271,1.0000,-1.854924271,0} 
+\]
+\[
+\ruffini{1,-1.854924271,1.0000,-1.854924271}{1,854924271}{1.854924271,0.0000,1.854924271}{1,0,1.0000,0} 
+\]
+
+
+Se verifica que $x_1 = 2,053075729$ y $x_2=1,854924271$ son raíces de la función $f(x)$.
+
+
+
+
+%salto de página
+\newpage
+
+%%%%%%%%%%%%%%%%%% ANEXO 3 %%%%%%%%%%%%%%%%%% 
+
+\textbf{ \huge\bfseries Anexo 3}
+
+\textbf{Solución del Ejercicio 2} 
+
+En primer lugar damos las funciones que vamos a utilizar:
+
+$
+\begin{array}{rcl}
+g(x) &=& 5x^3-10x^2+6,232x-1,232 \\
+g'(x) &=& 15x^2-20x+6,232 \\
+g''(x) &=& 30x-20
+\end{array}
+$
+
+Paso 1: hallar $\mu$ (raíz de la derivada) cercana a $x=0.5$. Como $g'(x)$ es de segundo grado, aplico la fórmula en radicales para hallar sus raíces:
+$$15x^2-20x+6,232=0 \ \ \Rightarrow \ \ \dfrac{20 \pm \sqrt{(-20)^2-4 \cdot 15 \cdot 6,232}}{2 \cdot 15}=
+\left\{
+\begin{array}{rcl}
+\mu_1&=&0,4964380622 \\
+\mu_2&=&0,8368952711
+\end{array}
+\right.$$
+
+Despreciamos $\mu_2$ y tomamos $\mu_1$ como el $\mu$ que nos interesa.
+
+Paso 2: hallar el $\varepsilon$ que nos asegure la convergencia
+$$\varepsilon^2=\dfrac{-2\cdot g(\mu)}{g'(\mu)} \ \ \Rightarrow \ \ \varepsilon^2=\dfrac{-2 \cdot (8,03929429 \cdot 10^{-3})}{-5,106858134} \ \ \Rightarrow \ \ \varepsilon= 0,056110878$$
+
+Paso 3: aplicamos el algoritmo de Newton con los valores iniciales $\mu + \varepsilon$ y $\mu - \varepsilon$.
+
+$
+\begin{array}{rcl}
+x_{0_1} = \mu + \varepsilon = 0,4964380622+0,056110878 = 0,5525489402 \\
+x_{0_2} = \mu - \varepsilon = 0,4964380622-0,056110878 = 0,4403271842
+\end{array}
+$
+
+Para $x_0=\mu+\varepsilon$ y obtenemos la secuencia:
+$$
+\left\{
+\begin{array}{rcl}
+x_0&=& 0,5525489402 \\
+x_{n+1} &=& x_n - \dfrac{g(x_n)}{g'(x_n)}
+\end{array}
+\right. \ \ \ \ \ \ \ 
+\renewcommand{\arraystretch}{1,5}
+ \begin{array}{|c | c|} 
+ \hline
+ \ \ n \ \  & \ \ x_n \ \ \\ [0.5ex] 
+ \hline\hline
+0 & 0,5525489402\\ 
+ \hline
+1 & 0,5603884526\\
+ \hline
+2 & 0,560000908\\
+ \hline
+3 & 0,560000000\\
+ \hline
+4 & 0,560000000\\
+ \hline
+\end{array}
+$$
+
+
+Luego para $x_0=\mu-\varepsilon$ y obtenemos la secuencia:
+$$
+\left\{
+\begin{array}{rcl}
+x_0&=& 0,4403271842 \\
+x_{n+1} &=& x_n - \dfrac{g(x_n)}{g'(x_n)}
+\end{array}
+\right. \ \ \ \ \ \ \ 
+\renewcommand{\arraystretch}{1,5}
+ \begin{array}{|c | c|} 
+ \hline
+ \ \ n \ \  & \ \ x_n \ \ \\ [0.5ex] 
+ \hline\hline
+0 & 0,4403271842\\ 
+ \hline
+1 & 0,4399989106\\
+ \hline
+2 & 0,4400000000\\
+ \hline
+3 & 0,4400000000\\
+ \hline
+\end{array}
+$$
+
+Paso 4: evalúo la función en ambos puntos candidatos a raices mediante el Algoritmo de Horner.
+
+\[
+\ruffini{5,-10,6.232,-1.232}{0,56}{2.8,-4.032,1.232}{5,-7.2,2.2,0} 
+\]
+\[
+\ruffini{5,-7.2,2.2}{0,44}{-2.2,-2.2}{5,5,0} 
+\]
+
+
+Se verifica que $x_1 = 0,560000000$ y $x_2=0,440000000$ son raíces de la función $g(x)$.
+
+
+
+
+
+
+
+
+\end{document}
